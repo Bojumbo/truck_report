@@ -12,7 +12,7 @@ function render(){if(!trip){content.innerHTML='<div class="card"><h2>Немає 
 
 function closeTrip(){let fields=[F('Одометр, км','number'),F('Кількість палива у тягачі, л','number')];if(trip.trailer_type==='Рефрижератор')fields.push(F('Кількість палива у рефі, л','number'),F('Мотогодини рефа','number'));openModal('Закрити рейс','Зазначте фінальні показники.',fields,async v=>{await api('/api/trips/'+trip.id+'/close',{method:'POST',body:JSON.stringify({closingOdometer:v['Одометр, км'],truckFuel:v['Кількість палива у тягачі, л'],reefFuel:v['Кількість палива у рефі, л']||null,reefHours:v['Мотогодини рефа']||null})});loadTrip()})}
 
-function openReport(){
+function legacyOpenReport(){
   if(!trip)return alert('Спочатку відкрийте рейс.');
   const dt=v=>new Date(v).toLocaleString('uk-UA'), n=v=>Number(v||0).toLocaleString('uk-UA',{maximumFractionDigits:2}), p=e=>e.payload||{};
   const fuels=events.filter(e=>e.type==='fuel'), expenses=events.filter(e=>e.type==='expense');
@@ -24,3 +24,28 @@ function openReport(){
   const w=window.open('','_blank');
   w.document.write(`<!doctype html><html lang="uk"><head><meta charset="utf-8"><title>Звітний лист водія</title><style>@page{size:A4;margin:10mm}body{font:10px Arial;color:#111}h1{text-align:center;font-size:17px;margin:0 0 8px}.meta{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid #222;margin-bottom:7px}.meta div{padding:5px;border-right:1px solid #222}.meta div:last-child{border:0}.label{font-size:8px;color:#555;display:block}h2{font-size:11px;margin:10px 0 3px;text-transform:uppercase}table{width:100%;border-collapse:collapse;margin-bottom:7px}th,td{border:1px solid #222;padding:3px;vertical-align:top}th{background:#eee;font-size:8px;text-transform:uppercase}.right{text-align:right}.foot{margin-top:12px;display:flex;justify-content:space-between}.page{break-after:page}@media print{button{display:none}}</style></head><body><h1>ЗВІТНИЙ ЛИСТ ВОДІЯ</h1><div class="meta"><div><span class="label">Водій</span>${user.name}</div><div><span class="label">Тягач / причіп</span>${trip.truck_name} ${trip.truck_number} / ${trip.trailer_name||'—'} ${trip.trailer_number||''}</div><div><span class="label">Період рейсу</span>${dt(trip.opened_at)} - ${trip.closed_at?dt(trip.closed_at):'відкритий'}</div></div><table><tr><th>Одометр на виїзді</th><th>Одометр на заїзді</th><th>Пробіг</th><th>ДП тягач: виїзд</th><th>ДП реф: виїзд</th><th>Мотогодини реф: виїзд</th></tr><tr><td>${n(trip.opening_odometer)}</td><td>${n(lastOdo)}</td><td>${n(Number(lastOdo)-Number(trip.opening_odometer))}</td><td>${n(trip.opening_truck_fuel)} л</td><td>${trip.trailer_type==='Рефрижератор'?n(trip.opening_reef_fuel)+' л':'—'}</td><td>${trip.trailer_type==='Рефрижератор'?n(trip.opening_reef_hours):'—'}</td></tr></table><h2>Аванс та залишок коштів</h2><table><tr><th></th><th>UAH</th><th>PLN</th><th>EUR</th></tr><tr><td>Отримано аванс</td><td>${n(trip.advance_uah)}</td><td>${n(trip.advance_pln)}</td><td>${n(trip.advance_eur)}</td></tr><tr><td>Залишок готівки</td><td>${n(b.UAH)}</td><td>${n(b.PLN)}</td><td>${n(b.EUR)}</td></tr></table><h2>Інші витрати</h2><table><tr><th>Дата</th><th>Коментар</th><th>UAH</th><th>PLN</th><th>EUR</th></tr>${expenses.length?expenses.map(e=>`<tr><td>${dt(e.occurred_at)}</td><td>${p(e).Коментар||''}</td><td>${p(e).Валюта==='UAH'?n(p(e).Сума):''}</td><td>${p(e).Валюта==='PLN'?n(p(e).Сума):''}</td><td>${p(e).Валюта==='EUR'?n(p(e).Сума):''}</td></tr>`).join(''):'<tr><td colspan="5">Немає</td></tr>'}</table><h2>Заправки ДП</h2><table><tr><th>Дата</th><th>Джерело / місце</th><th>ДП тягач, л</th><th>AdBlue, л</th><th>ДП реф, л</th><th>Суми</th></tr>${fuels.length?fuels.map(e=>`<tr><td>${dt(e.occurred_at)}</td><td>${p(e)['Де заправляємось']||''} ${p(e)['Де заправка']||''}</td><td>${p(e)['Кількість ДП в тягач, л']||''}</td><td>${p(e)['Кількість AdBlue, л']||''}</td><td>${p(e)['Кількість ДП в реф, л']||''}</td><td>${p(e)['Сума ДП']?n(p(e)['Сума ДП'])+' '+p(e)['Валюта ДП']:''} ${p(e)['Сума AdBlue']?' / '+n(p(e)['Сума AdBlue'])+' '+p(e)['Валюта AdBlue']:''} ${p(e)['Сума ДП рефа']?' / '+n(p(e)['Сума ДП рефа'])+' '+p(e)['Валюта ДП рефа']:''}</td></tr>`).join(''):'<tr><td colspan="6">Немає</td></tr>'}</table><h2>Маршрутний лист</h2><table><tr><th>Дата</th><th>Подія</th><th>Звідки</th><th>Куди</th><th>Одометр</th><th>Вантаж / коментар</th></tr>${routeRows.length?routeRows.map(r=>`<tr><td>${dt(r.date)}</td><td>${r.type}</td><td>${r.from}</td><td>${r.to}</td><td>${r.odo}</td><td>${r.comment}</td></tr>`).join(''):'<tr><td colspan="6">Немає</td></tr>'}</table><div class="foot"><span>Підпис водія: ____________________</span><span>Підпис адміністратора: ____________________</span></div><script>window.print()<\/script></body></html>`);
 }
+
+/* Report is available even with no active trip. */
+function openReport(){
+  const today=new Date(), iso=d=>d.toISOString().slice(0,10), monday=d=>{const x=new Date(d),day=x.getDay()||7;x.setDate(x.getDate()-day+1);return x};
+  openModal('Сформувати PDF-звіт','Оберіть період. Звіт включає всі ваші рейси й події, навіть якщо зараз немає відкритого рейсу.',[
+    F('Період','select','Календарний тиждень|Календарний місяць|Календарний рік|Довільний період'),F('Дата початку','date',null,true),F('Дата завершення','date',null,true)
+  ],async v=>{
+    let from,to=new Date();
+    if(v.Період==='Календарний тиждень'){from=monday(today);to=new Date(from);to.setDate(from.getDate()+6)}
+    else if(v.Період==='Календарний місяць'){from=new Date(today.getFullYear(),today.getMonth(),1);to=new Date(today.getFullYear(),today.getMonth()+1,0)}
+    else if(v.Період==='Календарний рік'){from=new Date(today.getFullYear(),0,1);to=new Date(today.getFullYear(),11,31)}
+    else {if(!v['Дата початку']||!v['Дата завершення'])throw Error('Для довільного періоду вкажіть обидві дати.');from=new Date(v['Дата початку']);to=new Date(v['Дата завершення'])}
+    if(from>to)throw Error('Дата початку не може бути пізніше дати завершення.');
+    const data=await api('/api/reports/driver?from='+iso(from)+'&to='+iso(to)); printPeriodReport(data,iso(from),iso(to));
+  });
+  const kind=document.querySelector('[name="Період"]'),dates=['Дата початку','Дата завершення'].map(n=>document.querySelector(`[name="${n}"]`).closest('label'));
+  const toggle=()=>dates.forEach(x=>x.classList.toggle('hidden',kind.value!=='Довільний період'));kind.onchange=toggle;toggle();
+}
+
+function printPeriodReport(data,from,to){
+  const esc=x=>String(x??'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])), dt=x=>new Date(x).toLocaleString('uk-UA');
+  const rows=data.events.map(e=>`<tr><td>${dt(e.occurred_at)}</td><td>${esc(label(e.type))}</td><td>${esc(e.truck_number||'')}</td><td>${esc(Object.values(e.payload||{}).filter(Boolean).join(' · '))}</td></tr>`).join('')||'<tr><td colspan="4">За обраний період подій немає.</td></tr>';
+  const w=window.open('','_blank');w.document.write(`<!doctype html><meta charset="utf-8"><title>Звітний лист водія</title><style>@page{size:A4;margin:12mm}body{font:11px Arial}h1{text-align:center}table{border-collapse:collapse;width:100%}td,th{border:1px solid #222;padding:5px;text-align:left}th{background:#eee}</style><h1>ЗВІТНИЙ ЛИСТ ВОДІЯ</h1><p>Водій: ${esc(user.name)}<br>Період: ${from} - ${to}<br>Рейсів у періоді: ${data.trips.length}</p><table><tr><th>Дата</th><th>Подія</th><th>Тягач</th><th>Деталі</th></tr>${rows}</table><p style="margin-top:35px">Підпис водія: ____________________ &nbsp;&nbsp; Підпис адміністратора: ____________________</p><script>window.print()<\/script>`);
+}
+
